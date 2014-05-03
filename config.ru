@@ -7,7 +7,7 @@ run lambda { |env|
     puts "tcp!"
 
     io = env[Puma::Const::HIJACK].call
-    io.puts "HTTP/1.1 101\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n"
+    io.puts "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n"
     io.flush
 
     loop do
