@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+
+STDOUT.sync = true
+
+require 'excon'
+
+url = ENV['URL'] || 'http://localhost:5000'
+
+class TcpUpgrade < Excon::Middleware::Base
+  def append_header_value(current_value, new_value)
+    tmp = (current_value || '').split(',')
+    tmp << new_value
+    tmp.uniq.join(', ')
+  end
+
+  def request_call(datum)
+    datum[:headers]['Connection'] = append_header_value(datum[:headers]['Connection'], 'Upgrade')
+    datum[:headers]['Upgrade'] = append_header_value(datum[:headers]['Upgrade'], 'tcp')
+    @stack.request_call(datum)
+  end
+
+  def response_call(datum)
+    socket = datum[:connection].send(:socket)
+    # p datum = Excon::Response.parse(socket, datum)
+    puts socket.read
+
+    if datum[:headers]["Connection"] =~ /upgrade/i && datum[:headers]["Upgrade"] =~ /tcp/i
+      puts "starting tcp connection"
+      socket.write('hello!')
+      socket.read
+    else
+      # @stack.response_call(datum)
+    end
+  end
+end
+
+Excon.defaults[:middlewares] = [TcpUpgrade, Excon::Middleware::ResponseParser]
+
+p conn = Excon.get(url, persistent: true)
+p [response.local_port, response.local_address]
