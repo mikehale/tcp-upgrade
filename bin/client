@@ -54,7 +54,7 @@ if status == 101 &&
       break
     end
 
-    sleep 3
+    sleep 1
   end
 
 end
