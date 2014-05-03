@@ -12,7 +12,7 @@ run lambda { |env|
 
     loop do
       begin
-        ready = IO.select([io],[], [], 1)
+        ready = IO.select([io],[], [], 0.1)
         readables = ready[0] if ready
 
         if readables && readables[0]
