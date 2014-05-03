@@ -1,28 +1,34 @@
 STDOUT.sync = true
 
-run lambda { |env, socket|
-  client= Puma::Client.new(socket, env)
-  client.reset
-  p http_env = client.env
+run lambda { |env|
+  if env[Puma::Const::HIJACK_P] &&
+      env['HTTP_CONNECTION'] =~ /upgrade/i &&
+      env['HTTP_UPGRADE'] =~ /tcp/i
+    puts "tcp!"
 
-  if http_env
-    if http_env['HTTP_CONNECTION'] =~ /upgrade/i && http_env['HTTP_UPGRADE'] =~ /tcp/i
-      response = <<-'RES'.gsub(/^\s+/,'')
-               HTTP/1.1 101
-               Connection: Upgrade
-               Upgrade: tcp
+    io = env[Puma::Const::HIJACK].call
+    io.puts "HTTP/1.1 101\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n"
+    io.flush
 
+    loop do
+      begin
+        ready = IO.select([io],[], [], 1)
+        readables = ready[0] if ready
 
-               RES
-      socket.write(response)
-      puts socket.read
-    else
-      headers = http_env.select {|k,v| k.start_with? 'HTTP_'}
-      .collect {|pair| [pair[0].sub(/^HTTP_/, ''), pair[1]]}
-      .collect {|pair| pair.join(": ") }
-      .sort
-      puts headers
-      [200, {'Content-Type' => 'text/plain'}, ['Hello World']]
+        if readables && readables[0]
+          puts io.recv_nonblock(1024)
+          io.puts "server"
+        end
+      rescue => e
+        puts e.inspect
+        io.close
+        break
+      end
     end
+
+    [-1, {}, []]
+  else
+    puts "http :|"
+    [200,{},[]]
   end
 }

@@ -2,39 +2,61 @@
 
 STDOUT.sync = true
 
-require 'excon'
+require 'socket'
+require 'uri'
 
-url = ENV['URL'] || 'http://localhost:5000'
+CRNL = "\r\n"
 
-class TcpUpgrade < Excon::Middleware::Base
-  def append_header_value(current_value, new_value)
-    tmp = (current_value || '').split(',')
-    tmp << new_value
-    tmp.uniq.join(', ')
-  end
+url = URI.parse(ENV['URL'] || 'http://localhost:5000')
 
-  def request_call(datum)
-    datum[:headers]['Connection'] = append_header_value(datum[:headers]['Connection'], 'Upgrade')
-    datum[:headers]['Upgrade'] = append_header_value(datum[:headers]['Upgrade'], 'tcp')
-    @stack.request_call(datum)
-  end
+s = TCPSocket.new(url.host, url.port)
+s.puts [
+        'GET / HTTP/1.1',
+        'Connection: Upgrade',
+        'Upgrade: tcp',
+        "Host: #{url.host}",
+       ].join(CRNL) + CRNL * 2
 
-  def response_call(datum)
-    socket = datum[:connection].send(:socket)
-    # p datum = Excon::Response.parse(socket, datum)
-    puts socket.read
+ready = IO.select([s])
+readable = ready[0][0]
 
-    if datum[:headers]["Connection"] =~ /upgrade/i && datum[:headers]["Upgrade"] =~ /tcp/i
-      puts "starting tcp connection"
-      socket.write('hello!')
-      socket.read
-    else
-      # @stack.response_call(datum)
+data = ''
+begin
+  data << readable.recv_nonblock(1024)
+  sleep 0.1
+end while !(data =~ /#{CRNL * 2}\Z/)
+
+_, status = data.split(CRNL)[0].split(/\s+/)
+status = status.to_i
+headers = data.split(CRNL)[1..-1].inject({}){ |m,e| k,v = e.split(/:\s+/); m[k.downcase] = v.downcase.split(','); m}
+
+puts data
+
+if status == 101 &&
+    headers['connection'].include?('upgrade') &&
+    headers['upgrade'].include?('tcp')
+
+  puts "starting tcp mode"
+  s.puts "client"
+
+  loop do
+    begin
+      ready = IO.select([s], [], [], 1)
+      readables = ready[0] if ready
+
+      if readables && readables[0]
+        puts s.recv_nonblock(1024)
+        s.puts "client"
+      end
+    rescue => e
+      puts e.inspect
+      s.close
+      break
     end
+
+    sleep 3
   end
+
 end
 
-Excon.defaults[:middlewares] = [TcpUpgrade, Excon::Middleware::ResponseParser]
-
-p conn = Excon.get(url, persistent: true)
-p [response.local_port, response.local_address]
+s.close
