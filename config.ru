@@ -16,8 +16,11 @@ run lambda { |env|
         readables = ready[0] if ready
 
         if readables && readables[0]
-          puts counter = Integer(io.recv_nonblock(1024).chomp)
-          io.puts counter + 1
+          begin
+            puts counter = Integer(io.recv_nonblock(1024).chomp)
+            io.puts counter + 1
+          rescue ArgumentError
+          end
         end
       rescue => e
         puts e.inspect
