@@ -16,8 +16,8 @@ run lambda { |env|
         readables = ready[0] if ready
 
         if readables && readables[0]
-          puts io.recv_nonblock(1024)
-          io.puts "server"
+          puts counter = io.recv_nonblock(1024).chomp.to_i
+          io.puts counter + 1
         end
       rescue => e
         puts e.inspect

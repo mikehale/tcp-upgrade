@@ -37,7 +37,7 @@ if status == 101 &&
     headers['upgrade'].include?('tcp')
 
   puts "starting tcp mode"
-  s.puts "client"
+  s.puts "0"
 
   loop do
     begin
@@ -45,8 +45,8 @@ if status == 101 &&
       readables = ready[0] if ready
 
       if readables && readables[0]
-        puts s.recv_nonblock(1024)
-        s.puts "client"
+        puts counter = s.recv_nonblock(1024).to_i
+        s.puts counter + 1
       end
     rescue => e
       puts e.inspect
